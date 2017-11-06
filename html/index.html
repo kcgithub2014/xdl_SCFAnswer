@@ -1,0 +1,31 @@
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>七色花自动答题</title>
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <style>
+        input.submit {
+            background: -webkit-linear-gradient(red, orange, yellow, green, blue, indigo, violet);
+            background: -o-linear-gradient(red, orange, yellow, green, blue, indigo, violet);
+            background: -moz-linear-gradient(red, orange, yellow, green, blue, indigo, violet);
+            background: linear-gradient(red, orange, yellow, green, blue, indigo, violet);
+            color: #ff0000;
+        }
+    </style>
+</head>
+
+<body>
+    <form method="post" action="/login">
+        电话：
+        <input name="tel" style="width:100%;height:5%">
+        <br> 密码：
+        <input name="password" style="width:100%;height:5%">
+        <br>
+        <input type="submit" style="width:100%;height:5%;margin-top:2%;" class="submit">
+    </form>
+    <span style="color:#C11920;font-size:18px;">目前题库只支持小绿花题库，自动答题题库壮大之后会添加</span>
+</body>
+
+</html>
