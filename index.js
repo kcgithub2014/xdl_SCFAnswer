@@ -11,8 +11,6 @@ import {base_headers, query_base_headers, origin, hjorigin, urls} from './config
 import {question_base_headers} from "./config/config";
 
 let app = express()
-    ,http = require('http').Server(app)
-    ,io = require('socket.io')(http)
     ,userData
     ,cookie
 
@@ -20,15 +18,7 @@ app.use(bodyParser.urlencoded({ extended: true }))
 app.use(bodyParser.json())
 app.set("view engine", "ejs")
 app.set("views", __dirname+'/html')
-app.listen(8080, '192.168.137.188')
-
-http.listen(3000,function(){
-  console.log('正在监听3000')
-})
-
-io.on('connection',(socket) => {
-  console.log('一个新的连接')
-})
+app.listen(8080)
 
 app.get('/', (req, res) => {
   fs.readFile(path.join(__dirname, 'html/index.html'),{encoding:'utf-8',flag:'r'},(err, data) => {
@@ -425,139 +415,3 @@ function strSimilarity2Percent(s, t){
 function Minimum(a,b,c){
   return a<b?(a<c?a:c):(b<c?b:c);
 }
-
-
-// function FQ(title){
-//   let data = {"kw": ""}
-//     ,DTtitle
-//   if(typeof title === 'object'){
-//     for(let x in title){
-//       data["kw"] = title[x]
-//       DTtitle = x
-//     }
-//   }
-//   if(typeof title === 'string'){
-//     data["kw"] = DTtitle = title
-//   }
-//   request
-//     .post(urls.search)
-//     .set(query_base_headers)
-//     .send(data)
-//     .end((err, res) => {
-//       if(err){
-//         console.log(`${userData.tel}查询答案失败啦~失败啦~败啦~啦`)
-//         return err
-//       }
-//       let $ = cheerio.load(res.text)
-//       DT.push({[DTtitle]: $('.answer span').text()})
-//     })
-// }
-//
-// function findQ(res){
-//   let $ = cheerio.load(res.text)
-//     QArr = trimSpace($('.weui-cells__title').text().replace(/[\s\uff1f\u70b9\u8d5e\u0028\u62cd\u7816\u0029]/g, "").split(/[0-9]\./))
-//   for(let i = 0;i<QArr.length;i++){
-//     let reg = new RegExp("\[\\u5355\\u9009\\u9898\\u591a\\u9009\\u9898\]","g")
-//       ,str = QArr[i].replace(reg, "").replace(/[0-9]/g, "")
-//       ,x = 2
-//     request
-//       .post(urls.query)
-//       .set(query_base_headers)
-//       .send({"haijiang": str.substr(0, x)})
-//       .end((err, res) => {
-//         if(err){
-//           console.log(`${userData.tel}查询题目失败啦~失败啦~败啦~啦`)
-//           return 'error'
-//         }
-//         if(res.body.length > 1) FT(str, x+res.body.length/2 | 0)
-//         if(res.body.length < 1) FT(str, x/2 | 0)
-//         if(x === 0) NQ = i
-//         if(res.body.length === 1) {
-//           let t = qj2bj(res.body[0].title.replace(/&quot;/g, '“').replace(/\s/g, ""))
-//             ,_str = qj2bj(str.replace(/\s/g, ""))
-//             ,CD = {[_str]: t}
-//           if(strSimilarity2Percent(_str, t) > 80){
-//             FQ(res.body[0].title.replace(/&quot;/g,'"'))
-//           }
-//           if(strSimilarity2Percent(_str, t) < 80){
-//             CacheData.push(CD)
-//           }
-//         }
-//       })
-//   }
-// }
-// app.get('/question', (req, res) => {
-//   let html = `<html><head><meta charset="utf-8"><title>七色花答题页</title></head>
-//                 <body><form action="/userAnswer" method="post"><p>`
-//   if(CacheData.length){
-//     for(let i=0;i<CacheData.length;i++){
-//       html += `${JSON.stringify(CacheData[i])}<br><input type="radio" name="${i}" value="y">相同 <br><input type="radio" name="${i}" value="n">不相同</p>`
-//     }
-//     html += `<input type="submit" value="提交"></form></body></html>`
-//   }else{
-//     html += `没有不同~</p><input type="submit" value="提交"></form></body></html>`
-//   }
-//   res.send(html)
-// })
-
-// app.post('/userAnswer',(req, res) => {
-//   if(JSON.stringify(req.body) == '{}'){
-//     res.redirect('/startAnswer')
-//     return
-//   }
-//   for(let k in req.body){
-//     if(req.body[k] === 'y'){
-//       for(let x in CacheData[k]){
-//         FQ(CacheData[k])
-//         setTimeout(() => {
-//           res.redirect('/startAnswer')
-//         },5000)
-//         return
-//       }
-//     }
-//     if(req.body[k] === 'n'){
-//       return
-//     }
-//   }
-// })
-
-// app.get('/startAnswer',(req, res) => {
-//   let $ = cheerio.load(questionData.text)
-//     ,reg = new RegExp("\[\\u5355\\u9009\\u9898\\u591a\\u9009\\u9898\]","g")
-//     ,label
-//   $('.weui-cells__title').each((idx, elm) => {
-//     let t = qj2bj($(elm).text().replace(/[\s\uff1f\u70b9\u8d5e\u0028\u62cd\u7816\u00290-9\.]/g, "").replace(reg, ""))
-//       ,QType = $(elm).text().match(reg).join('')
-//     for(let i=0;i<DT.length;i++){
-//       for(let x in DT[i]){
-//         let _x = qj2bj(x).replace(/"/g, '“').replace(/\s/g, "")
-//           ,jieguo
-//         if(strSimilarity2Percent(t, _x)> 60){
-//           label = $(elm).next().children()
-//           $(label).each((idx, elm) => {
-//             let xuanxiang = qj2bj($(elm).find('span').text().replace(/[a-zA-Z]\.\s/g, "")).replace(/"/g, '“')
-//             // console.log($(elm).find('input').attr('name')+'   '+$(elm).find('input').val()+'   '+$(elm).find('span').text())
-//             if(QType.indexOf('多选题') > -1){
-//               jieguo = DT[i][x].toLocaleUpperCase().replace(/[0-9]/g, "").split(' ')
-//               if(contains(jieguo, xuanxiang)){
-//                 if(DA.hasOwnProperty($(elm).find('input').attr('name'))){
-//                   DA[$(elm).find('input').attr('name')] += $(elm).find('input').val()
-//                 }else{
-//                   DA[$(elm).find('input').attr('name')] = $(elm).find('input').val()
-//                 }
-//               }
-//             }else{
-//               jieguo = DT[i][x]
-//               if(strSimilarity2Percent(xuanxiang, DT[i][x]) == 100){
-//                 DA[$(elm).find('input').attr('name')] = $(elm).find('input').val()
-//               }
-//             }
-//           })
-//         }
-//       }
-//     }
-//     console.log(DA)
-//   })
-//   // console.log(DT)
-
-// })
