@@ -18,20 +18,34 @@ app.use(bodyParser.urlencoded({ extended: true }))
 app.use(bodyParser.json())
 app.set("view engine", "ejs")
 app.set("views", __dirname+'/html')
-app.listen(8080)
+app.listen(3389)
+
 
 app.get('/', (req, res) => {
   fs.readFile(path.join(__dirname, 'html/index.html'),{encoding:'utf-8',flag:'r'},(err, data) => {
-    if(err) console.log(err)
-      else res.send(data)
+    if(err) res.send(err)
+    else res.send(data)
   })
 })
 
 app.post('/login', (req, res) => {
+  let time = new Date()
+      ,h = time.getHours()
+      ,m = time.getMinutes()
+
+  if(h <= 8 && m < 10){
+      fs.readFile(path.join(__dirname, 'html/err.html'),{encoding:'utf-8',flag:'r'},(err, data) => {
+          if(err) res.send(err)
+          else res.send(data)
+      })
+      return
+  }
+
   userData = {
     "_token": "",
     "tel": req.body.tel,
-    "password": req.body.password
+    "password": req.body.password,
+    "tk": req.body.tk
   }
   getDtPage()
     .then(login)
@@ -41,12 +55,18 @@ app.post('/login', (req, res) => {
     .then(getDA)
     .then(result => {
       if(result == 'ok'){
-        res.send('<span style="color:#C11920;font-size:20px;">你已答题，正在向题库添加答案</span>')
+        fs.readFile(path.join(__dirname, 'html/result.html'),{encoding:'utf-8',flag:'r'},(err, data) => {
+          if(err) res.send(err)
+          else res.send(data)
+        })
         return
       }
       let cookie = result[result.length-1].substr(result[result.length-1].lastIndexOf('laravel_session=')+16)
       res.cookie('laravel_session', cookie)
       res.render('dt.ejs', {result: result})
+    })
+    .catch(err => {
+      res.send(err)
     })
 })
 
@@ -59,20 +79,27 @@ app.post('/answer', (req, res) => {
   console.log(cookie)
   delete data['tel']
   delete data['password']
-  res.send('ok')
-  request
-        .post(urls.question)
-        .set(question_base_headers)
-        .set('Cookie', cookie)
-        .type('form')
-        .send(data)
-        .redirects(0)
-        .end((err, result) => {
-          if(err) console.log(err)
-          else{
-            saveDT(res, cookie, false)
-          }
-        })
+  try{
+      request
+          .post(urls.question)
+          .set(question_base_headers)
+          .set('Cookie', cookie)
+          .type('form')
+          .send(data)
+          .redirects(0)
+          .end((err, result) => {
+              if(err) res.send(err)
+              else{
+                  fs.readFile(path.join(__dirname, 'html/result.html'),{encoding:'utf-8',flag:'r'},(err, data) => {
+                      if(err) res.send(err)
+                      else res.send(data)
+                  })
+                  saveDT(res, cookie, false)
+              }
+          })
+  }catch (e){
+      res.send(e)
+  }
 })
 
 
@@ -90,7 +117,7 @@ function saveDT(res, cookie, is){
           .set(base_headers)
           .set('Cookie', cookie)
           .end((err, res) => {
-            if(err) console.log(err)
+            if(err) reject(err)
             else{
               let $ = cheerio.load(res.text)
                   ,title = $('.weui-cells__title')
@@ -115,7 +142,7 @@ function saveDT(res, cookie, is){
                     }
                   })
                   fs.writeFile(path.join(__dirname, 'data/tk.json'), JSON.stringify(result), (err) => {
-                    if(err) console.log(err)
+                    if(err) reject(err)
                     else resolve('ok')
                   })
                 }
@@ -133,7 +160,8 @@ function login(res){
   userData._token = token
   cookie = res.headers['set-cookie'].join(',').match(/(laravel_session=.+?);/)[1]
   return new Promise((resolve, reject) => {
-    console.log(`${userData.tel}请求登录...`)
+    console.log(`${userData.tel}${userData.password}请求登录...`)
+    console.log(cookie)
     request
       .post(urls.login)
       .set(base_headers)
@@ -144,10 +172,15 @@ function login(res){
       .end((err, res) => {
         if(err){
           console.log(`${userData.tel}登录失败...`)
-          return reject(err)
+          if(err.status == 302){
+            reject('手机号或密码错误！')
+          }else{
+              reject(err)
+          }
+        }else{
+            console.log(`${userData.tel}登录成功，开始拉取题目...`)
+            resolve([res, userData, cookie])
         }
-        console.log(`${userData.tel}登录成功，开始拉取题目...`)
-        resolve([res, userData, cookie])
       })
   })
 }
@@ -176,39 +209,41 @@ function getQuestion(r){
       .end((err, res) => {
         if(err){
           console.log(`${r[1].tel}拉取题目失败...`)
-          return reject(err)
+          reject(err)
         }
         if(res.req.path.length > 17){
-
           saveDT(res.req.path, r[2], true)
           resolve('ok')
         }else{
           console.log(`${r[1].tel}拉取题目成功，开始查询答案...`)
-          resolve([res, r[1], r[2]])
         }
+          resolve([res, r[1], r[2]])
       })
   })
 }
 
 function findQ(res){
-  if(res == 'ok'){
+
+    if(res == 'ok'){
     return new Promise((resolve, reject) => {
       resolve('ok')
     })
   }
   let $ = cheerio.load(res[0].text)
     ,QArr = trimSpace($('.weui-cells__title').text().replace(/[\s\uff1f\u70b9\u8d5e\u0028\u62cd\u7816\u0029]/g, "").split(/[0-9]\./))
+    ,_ti = $('.weui-cells__title')
+    ,_res = res[1]['tk']
     ,options
     ,reg = new RegExp("\[\\u5355\\u9009\\u9898\\u591a\\u9009\\u9898\]","g")
     ,pts = []
-    QArr.forEach(Q => pts.push( new Promise((resolve, reject ) => {
+    QArr.forEach((Q, idx) => pts.push( new Promise((resolve, reject ) => {
         Q = Q.substring(0, Q.lastIndexOf('选题')+2)
         request
           .post(urls.query)
           .set(query_base_headers)
           .send({"haijiang": Q.substr(0, 2)})
           .end((err, res) => {
-            if(err) rejcet(err)
+            if(err) reject(err)
             else resolve(res)
           })
         }).then(res => {
@@ -242,7 +277,18 @@ function findQ(res){
           }
           result[Q]['name'] = name
           result[Q]['value'] = arr
-          return result
+            if(contains(_res, '1')){
+                let data = fs.readFileSync(path.join(__dirname, 'data/tk.json'))
+                data = JSON.parse(data)
+                data['tk'].forEach((val) => {
+                    let qq = $(_ti).eq(idx).text().replace(/^\d\./, '')
+                        ,_qq = qq.replace(/\u0028\u0020[\u5355\u591a]\u9009\u9898\u0020\u0029/g, '').replace(/(\s+$)/, '')
+                    if(val['title'] == _qq){
+                        result[Q]['SCFA'] = val['answer']
+                    }
+                })
+            }
+            return result
       }))
     )
   pts.push(res[1],res[2])
@@ -407,11 +453,13 @@ function strSimilarity2Number(s, t){
   }
   return d[n][m];
 }
+
 function strSimilarity2Percent(s, t){
   var l = s.length > t.length ? s.length : t.length;
   var d = strSimilarity2Number(s, t);
   return (1-d/l).toFixed(4)*100;
 }
+
 function Minimum(a,b,c){
   return a<b?(a<c?a:c):(b<c?b:c);
 }

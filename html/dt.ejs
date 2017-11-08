@@ -29,6 +29,7 @@
     </div>
 </header>
 <div class="container" id="question">
+    <% function isInArray(arr,value){for(var i = 0; i < arr.length; i++){if(value === arr[i]){return true;}}return false;} %>
     <form action="/answer" method="post" id="quest-form">
         <input type="hidden" name="_token" value="<%= result[result.length-2]['_token'] %>">
         <input type="hidden" name="tel" value="<%= result[result.length-2]['tel'] %>">
@@ -44,18 +45,34 @@
                 <br>
                 <%= '查询题目：' + q[x]['hjtitle'] %>
                 <br>
-                <p
+                <div
                         <% for(var xx in q){if(q[xx]['result']){ %>
                         <%= '' %>
                         <% }} %>
                 >
-                    <span style="font-size:14px;color:#C11920"><%= '小绿花题库查询到的答案，（供参考）:' %></span>
-                    <br>
-                    <% q[x]['solution'].forEach(function(val){ %>
-                    <span style="font-size:14px;color: #c11920;"><%= val %></span>
-                    <br>
+
+                    <% if(q[x]['SCFA']){ %>
+                        <p <% if(!isInArray(result[result.length-2]['tk'], '1')){ %><%= 'style=display:none' %> <% } %>>
+                            <span style="font-size:15px;color:#00ff00"><%= '七色花题库查询到的答案，（供参考）:' %></span>
+                            <br>
+                            <% q[x]['SCFA'].forEach(function(val){ %>
+                            <span style="font-size:15px;color: #00ff00;"><%= val %></span>
+                            <br>
+                        <% }) %>
+                        </p>
+                    <% } %>
+
+                    <% if(q[x]['solution']){ %>
+                    <p <% if(!isInArray(result[result.length-2]['tk'], '0')){ %><%= 'style=display:none' %> <% } %>>
+                        <span style="font-size:15px;color:#C11920"><%= '小绿花题库查询到的答案，（供参考）:' %></span>
+                        <br>
+                        <% q[x]['solution'].forEach(function(val){ %>
+                        <span style="font-size:15px;color: #C11920;"><%= val %></span>
+                        <br>
                     <% }) %>
-                </p>
+                    </p>
+                    <% } %>
+                </div>
                 <% } %>
             </div>
             <div class="weui-cells">
@@ -68,6 +85,9 @@
                             <% for(var key in val){ %>
                             <input type="radio" name="<%= q[x]['name'] %>" value="<%= key %>"
                                     <% q[x]['solution'].forEach(function(v){if(val[key] == v ){ %>
+                                    <%= 'checked=checked' %>
+                                    <% }}) %>
+                                    <% q[x]['SCFA'].forEach(function(v){if(val[key] == v ){ %>
                                     <%= 'checked=checked' %>
                                     <% }}) %>
                             >
@@ -87,6 +107,9 @@
                             <% for(var key in val){ %>
                             <input type="checkbox" name="<%= q[x]['name'] %>" value="<%= key %>"
                                     <% q[x]['solution'].forEach(function(v){if(val[key] == v ){ %>
+                                    <%= 'checked=checked' %>
+                                    <% }}) %>
+                                    <% q[x]['SCFA'].forEach(function(v){if(val[key] == v ){ %>
                                     <%= 'checked=checked' %>
                                     <% }}) %>
                             >
