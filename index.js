@@ -18,7 +18,7 @@ app.use(bodyParser.urlencoded({ extended: true }))
 app.use(bodyParser.json())
 app.set("view engine", "ejs")
 app.set("views", __dirname+'/html')
-app.listen(3389)
+app.listen(8080)
 
 
 app.get('/', (req, res) => {
