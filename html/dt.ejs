@@ -51,7 +51,7 @@
                         <% }} %>
                 >
 
-                    <% if(q[x]['SCFA']){ %>
+                    <% if(q[x].hasOwnProperty('SCFA')){ %>
                         <p <% if(!isInArray(result[result.length-2]['tk'], '1')){ %><%= 'style=display:none' %> <% } %>>
                             <span style="font-size:15px;color:#00ff00"><%= '七色花题库查询到的答案，（供参考）:' %></span>
                             <br>
@@ -87,9 +87,10 @@
                                     <% q[x]['solution'].forEach(function(v){if(val[key] == v ){ %>
                                     <%= 'checked=checked' %>
                                     <% }}) %>
-                                    <% q[x]['SCFA'].forEach(function(v){if(val[key] == v ){ %>
-                                    <%= 'checked=checked' %>
-                                    <% }}) %>
+                                    <% if(q[x].hasOwnProperty('SCFA')){ %>
+                                        <% q[x]['SCFA'].forEach(function(v){if(val[key] == v ){ %>
+                                        <%= 'checked=checked' %>
+                                    <% }})} %>
                             >
                             <% if(val['type'] == 'span'){ %>
                             <% delete val['type'] %>
@@ -109,9 +110,10 @@
                                     <% q[x]['solution'].forEach(function(v){if(val[key] == v ){ %>
                                     <%= 'checked=checked' %>
                                     <% }}) %>
+                                    <% if(q[x].hasOwnProperty('SCFA')){ %>
                                     <% q[x]['SCFA'].forEach(function(v){if(val[key] == v ){ %>
                                     <%= 'checked=checked' %>
-                                    <% }}) %>
+                                    <% }})} %>
                             >
                             <% if(val['type'] == 'span'){ %>
                             <% delete val['type'] %>

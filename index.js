@@ -32,8 +32,7 @@ app.post('/login', (req, res) => {
   let time = new Date()
       ,h = time.getHours()
       ,m = time.getMinutes()
-
-  if(h <= 8 && m < 10){
+  if(h <= 8 && m <= 9){
       fs.readFile(path.join(__dirname, 'html/err.html'),{encoding:'utf-8',flag:'r'},(err, data) => {
           if(err) res.send(err)
           else res.send(data)
@@ -71,12 +70,11 @@ app.post('/login', (req, res) => {
 })
 
 app.post('/answer', (req, res) => {
-  let cookie = req.headers.cookie.match(/(laravel_session=.+)/)[1]
+  let cookie = decodeURI(req.headers.cookie.match(/(laravel_session=.+)/)[1])
       ,data = req.body
       ,tel = req.body.tel
       ,password = req.body.password
       ,_token = req.body._token
-  console.log(cookie)
   delete data['tel']
   delete data['password']
   try{
@@ -88,13 +86,15 @@ app.post('/answer', (req, res) => {
           .send(data)
           .redirects(0)
           .end((err, result) => {
-              if(err) res.send(err)
-              else{
+              if(err.response.statusCode == 200) {
                   fs.readFile(path.join(__dirname, 'html/result.html'),{encoding:'utf-8',flag:'r'},(err, data) => {
                       if(err) res.send(err)
                       else res.send(data)
                   })
-                  saveDT(res, cookie, false)
+                  saveDT(result, cookie, false)
+              }
+              else{
+                  res.send(err)
               }
           })
   }catch (e){
@@ -161,7 +161,6 @@ function login(res){
   cookie = res.headers['set-cookie'].join(',').match(/(laravel_session=.+?);/)[1]
   return new Promise((resolve, reject) => {
     console.log(`${userData.tel}${userData.password}请求登录...`)
-    console.log(cookie)
     request
       .post(urls.login)
       .set(base_headers)
@@ -277,14 +276,20 @@ function findQ(res){
           }
           result[Q]['name'] = name
           result[Q]['value'] = arr
+            // 查询七色花题库
             if(contains(_res, '1')){
                 let data = fs.readFileSync(path.join(__dirname, 'data/tk.json'))
                 data = JSON.parse(data)
-                data['tk'].forEach((val) => {
-                    let qq = $(_ti).eq(idx).text().replace(/^\d\./, '')
-                        ,_qq = qq.replace(/\u0028\u0020[\u5355\u591a]\u9009\u9898\u0020\u0029/g, '').replace(/(\s+$)/, '')
-                    if(val['title'] == _qq){
-                        result[Q]['SCFA'] = val['answer']
+                $(_ti).each((_idx, elm) => {
+                    if(idx == _idx){
+                        let qq = $(elm).text().replace(/(^\s+)/, "").replace(/^\d\./, '')
+                            ,strindex = (/\u0028\u0020[\u5355\u591a]\u9009\u9898\u0020\u0029/).exec(qq)['index']
+                            ,_qq = qq.substring(0, strindex).replace(/(\s+$)/, "")
+                        data['tk'].forEach((val) => {
+                            if(val['title'] == _qq){
+                                result[Q]['SCFA'] = val['answer']
+                            }
+                        })
                     }
                 })
             }
