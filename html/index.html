@@ -42,7 +42,7 @@
 <body>
     <header>
         <div class="weui-flex">
-            <div class="weui-flex__item">兄弟连七色花答题系统</div>
+            <div class="weui-flex__item" style="font-size: 15px;">兄弟连七色花答题系统</div>
         </div>
     </header>
     <p style="font-size: 20px;color: #ff0000;text-align: center;">答题时间：8:10-23:00</p>
@@ -54,18 +54,48 @@
         <input type="password" name="password" style="width:100%;height:5%" required>
         <a href="https://dt.itxdl.cn/mobile/reset" target="_blank" style="color:#0366d6;font-size:15px;text-decoration: none;float:right;">忘记小红花密码？</a>
         <br>
-        <span style="clear:both;">请选择题库：</span>
+        <span style="clear: both;">请选择题库：</span>
         <br>
         <input type="checkbox" name="tk" value="0" checked>小绿花
+        <span id="XLH-length" style="font-size: 14px;color: #0600ff;"></span>
+        <br>
         <input type="checkbox" name="tk" value="1" checked>七色花
-        <input type="submit" style="width:100%;height:5%;margin-top:2%;" class="submit">
+        <span id="SCFA-length" style="font-size: 14px;color: #0600ff;"></span>
+        <input type="submit" style="width:100%;height:5%;margin-top:2%;font-size: 15px;" class="submit">
     </form>
-    <span style="color:#ff0000;font-size:15px;display: block;width: 95%;margin:0 auto;">默认启用双题库，说明：<br>
+    <span style="color:#ff0000;font-size:15px;display: block;width: 95%;margin:2% auto 0;">默认启用双题库，说明：<br>
         1.由于小绿花题库答案存在标点符号对不上，有个别答案可能没有选中，请手动选择 <br>
         2.程序大部分在处理小绿花题库答案，七色花题库为程序自动存储，理论上来说，七色花题库匹配度高。 <br>
         3.小绿花题库目前题库量大 <br>
-        4.若出现打不开的情况，请耐心等待修复（欢迎提交... 明天更美好~） <br>
+        4.若出现打不开的情况，请耐心等待修复 <br>
+        5.欢迎<a target="_blank" href="http://sighttp.qq.com/authd?IDKEY=986aa10e7a51362337113fc45784ae7cee42f087727c1b17">提交bug...</a>明天更美好~<br>
     </span>
+    <script>
+        var xhr = null;
+        if(window.XMLHttpRequest){
+            xhr = new XMLHttpRequest();
+        }else{
+            xhr = new ActiveXObject('Microsoft.XMLHTTP');
+        }
+        if(xhr){
+            xhr.open('post', '/tklength', true);
+            xhr.send();
+            xhr.onreadystatechange = function(){
+                if(xhr.readyState == 4){
+                    if(xhr.status == 200){
+                        var SCFADataLength = JSON.parse(xhr.responseText)['SCFADataLength']
+                            ,XLHDataLength = JSON.parse(xhr.responseText)['XLHDataLength']
+                        if(SCFADataLength){
+                            document.getElementById('SCFA-length').innerHTML = '七色花当前题目数量：'+ SCFADataLength;
+                        }
+                        if(XLHDataLength){
+                            document.getElementById('XLH-length').innerHTML = '小绿花当前题目数量：'+ XLHDataLength;
+                        }
+                    }
+                }
+            }
+        }
+    </script>
 </body>
 
 </html>

@@ -8,8 +8,11 @@
     <title>七色花自动答题</title>
 </head>
 <body>
-    <span style="color:#C11920;font-size:20px;">请在答题时间答题~</span>
-    <br>
-    <a href="#" onClick="javascript:history.go(-1);return false;">返回上一页</a>
+    <header>
+        <div class="weui-flex">
+            <div class="weui-flex__item" style="color: #ffffff;">你已答题，正在向题库添加答案</div>
+        </div>
+    </header>
+    <%- result %>
 </body>
 </html>

@@ -5,14 +5,13 @@ import request from 'superagent'
 import cheerio from 'cheerio'
 import bodyParser from 'body-parser'
 import express from 'express'
-import querystring from 'querystring'
 import ejs from 'ejs'
-import {base_headers, query_base_headers, origin, hjorigin, urls} from './config/config.js'
-import {question_base_headers} from "./config/config";
+import {base_headers, query_base_headers, urls, question_base_headers, historyBack} from './config/config.js'
 
 let app = express()
     ,userData
     ,cookie
+    ,errHtml
 
 app.use(bodyParser.urlencoded({ extended: true }))
 app.use(bodyParser.json())
@@ -28,15 +27,34 @@ app.get('/', (req, res) => {
   })
 })
 
+app.post('/tklength', (req, res) => {
+    let XLHDataLength
+        ,data = fs.readFileSync(path.join(__dirname, 'data/tk.json'))
+        ,SCFADataLength = JSON.parse(data)["tk"].length
+    getXLHDataLength()
+        .then(result => {
+            XLHDataLength = result.body.length
+            res.send({'SCFADataLength': SCFADataLength, 'XLHDataLength': (XLHDataLength ? XLHDataLength : 0)})
+        })
+        .catch(err => {
+            res.send({'SCFADataLength': SCFADataLength, 'XLHDataLength': (XLHDataLength ? XLHDataLength : 0)})
+        })
+})
+
+getErrHtml()
+    .then(res => {
+        errHtml = res
+    })
+
 app.post('/login', (req, res) => {
   let time = new Date()
       ,h = time.getHours()
       ,m = time.getMinutes()
-  if(h <= 8 && m <= 9){
-      fs.readFile(path.join(__dirname, 'html/err.html'),{encoding:'utf-8',flag:'r'},(err, data) => {
-          if(err) res.send(err)
-          else res.send(data)
-      })
+  if(h < 8){
+      res.send(errHtml)
+      return
+  }else if(h == 8 && m < 10){
+      res.send(errHtml)
       return
   }
 
@@ -53,11 +71,12 @@ app.post('/login', (req, res) => {
     .then(countQ)
     .then(getDA)
     .then(result => {
-      if(result == 'ok'){
-        fs.readFile(path.join(__dirname, 'html/result.html'),{encoding:'utf-8',flag:'r'},(err, data) => {
-          if(err) res.send(err)
-          else res.send(data)
-        })
+      if(typeof result == 'string'){
+          let $ = cheerio.load(result)
+              $('head script').html('')
+              $('header').remove()
+              $('.top-15').html(historyBack)
+        res.render('result.ejs',{result: $('html').html()})
         return
       }
       let cookie = result[result.length-1].substr(result[result.length-1].lastIndexOf('laravel_session=')+16)
@@ -87,22 +106,48 @@ app.post('/answer', (req, res) => {
           .redirects(0)
           .end((err, result) => {
               if(err.response.statusCode == 200) {
-                  fs.readFile(path.join(__dirname, 'html/result.html'),{encoding:'utf-8',flag:'r'},(err, data) => {
-                      if(err) res.send(err)
-                      else res.send(data)
-                  })
                   saveDT(result, cookie, false)
+                      .then(result => {
+                          let $ = cheerio.load(result)
+                          $('head script').html('')
+                          $('header').remove()
+                          $('.top-15').html(historyBack)
+                          res.render('result.ejs',{result: $('html').html()})
+                      })
+                      .catch(err => {
+                          res.send('2017/11/10 修改，有待测试，此报错不影响提交')
+                          console.log(err)
+                      })
               }
               else{
-                  res.send(err)
+                  res.send('服务器内部错误！请联系管理员')
               }
           })
   }catch (e){
-      res.send(e)
+      res.send('提交答案错误！请联系管理员')
   }
 })
 
+function getErrHtml(){
+    return new Promise((resolve, reject) => {
+        fs.readFile(path.join(__dirname, 'html/err.html'),{encoding:'utf-8',flag:'r'},(err, data) => {
+            if(err) reject(err)
+            else resolve(data)
+        })
+    })
+}
 
+function getXLHDataLength(){
+    return new Promise((resolve, reject) => {
+        request
+            .post(urls.searchAll)
+            .set(query_base_headers)
+            .end((err, res) => {
+                if(err) reject(err)
+                else resolve(res)
+            })
+    })
+}
 function saveDT(res, cookie, is){
       let href
       if(!is){
@@ -119,6 +164,7 @@ function saveDT(res, cookie, is){
           .end((err, res) => {
             if(err) reject(err)
             else{
+                resolve(res.text)
               let $ = cheerio.load(res.text)
                   ,title = $('.weui-cells__title')
                   ,result
@@ -143,7 +189,6 @@ function saveDT(res, cookie, is){
                   })
                   fs.writeFile(path.join(__dirname, 'data/tk.json'), JSON.stringify(result), (err) => {
                     if(err) reject(err)
-                    else resolve('ok')
                   })
                 }
               })
@@ -212,7 +257,13 @@ function getQuestion(r){
         }
         if(res.req.path.length > 17){
           saveDT(res.req.path, r[2], true)
-          resolve('ok')
+              .then(result => {
+                  resolve(result)
+              })
+              .catch(err => {
+                  resolve('err')
+              })
+            return
         }else{
           console.log(`${r[1].tel}拉取题目成功，开始查询答案...`)
         }
@@ -222,12 +273,11 @@ function getQuestion(r){
 }
 
 function findQ(res){
-
-    if(res == 'ok'){
-    return new Promise((resolve, reject) => {
-      resolve('ok')
-    })
-  }
+    if(typeof res == 'string'){
+        return new Promise((resolve, reject) => {
+            resolve(res)
+        })
+    }
   let $ = cheerio.load(res[0].text)
     ,QArr = trimSpace($('.weui-cells__title').text().replace(/[\s\uff1f\u70b9\u8d5e\u0028\u62cd\u7816\u0029]/g, "").split(/[0-9]\./))
     ,_ti = $('.weui-cells__title')
@@ -301,11 +351,11 @@ function findQ(res){
 }
 
 function countQ(r){
-  if(r == 'ok'){
-    return new Promise((resolve, reject) => {
-      resolve('ok')
-    })
-  }
+    if(typeof r == 'string'){
+        return new Promise((resolve, reject) => {
+            resolve(r)
+        })
+    }
   let result = []
       ,res = r.slice(0, r.length-2)
   return new Promise((resolve, reject) => {
@@ -336,11 +386,11 @@ function countQ(r){
 }
 
 function getDA(r){
-  if(r == 'ok'){
-    return new Promise((resolve, reject) => {
-      resolve('ok')
-    })
-  }
+    if(typeof r == 'string'){
+        return new Promise((resolve, reject) => {
+            resolve(r)
+        })
+    }
   let pts = []
       ,result = r.slice(0, r.length-2)
   result.forEach(Q => {

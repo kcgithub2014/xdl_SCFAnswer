@@ -40,7 +40,7 @@ export const query_base_headers = {
   'User-AgentUser-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36',
   'X-Requested-With': 'XMLHttpRequest'
 }
-
+export const historyBack = '<a style="display: block;width: 100%;height: 46px;text-align: center;background-color: #e64340;border-radius: 5px;line-height: 46px;color: #FFFFFF;" href="#" onClick="javascript:history.go(-1);return false;">返回上一页</a>'
 export const origin = 'https://dt.itxdl.cn/mobile'
 
 export const hjorigin = 'https://www.lihaijiang.top/home/index'
@@ -50,4 +50,5 @@ export const urls = {
   login: `${origin}/login`,
   question: `${origin}/question`,
   query: `${hjorigin}/haijiang`,
-  search: `${hjorigin}/search.html`}
+  search: `${hjorigin}/search.html`,
+  searchAll: `${hjorigin}/searchAll`}
