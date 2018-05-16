@@ -2,13 +2,19 @@
   "name": "my-project",
   "version": "1.0.0",
   "devDependencies": {
+    "async": "^2.6.0",
+    "babel-preset-es2015": "^6.24.1",
+    "babel-preset-stage-1": "^6.24.1",
     "body-parser": "^1.18.2",
     "cheerio": "^1.0.0-rc.2",
     "ejs": "^2.5.7",
     "express": "^4.16.2",
-    "superagent": "^3.7.0"
+    "nodemailer": "^4.6.4",
+    "superagent": "^3.7.0",
+    "superagent-charset": "^1.2.0",
+    "superagent-proxy": "^1.0.2"
   },
   "dependencies": {
-    "babel-preset-es2015": "^6.24.1",
+    "babel-preset-es2015": "^6.24.1"
   }
 }

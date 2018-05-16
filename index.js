@@ -2,29 +2,333 @@
 import path from 'path'
 import fs from 'fs'
 import request from 'superagent'
+import requestProxy from 'superagent-proxy'
 import cheerio from 'cheerio'
 import bodyParser from 'body-parser'
 import express from 'express'
 import ejs from 'ejs'
-import {base_headers, query_base_headers, urls, question_base_headers, historyBack} from './config/config.js'
+import {base_headers, query_base_headers, urls, question_base_headers, historyBack, dlHeaders, ipHeaders} from './config/config.js'
+import nodemailer from 'nodemailer';
+
+let transporter = nodemailer.createTransport({
+    service: 'iCloud', // 使用了内置传输发送邮件 查看支持列表：https://nodemailer.com/smtp/well-known/
+    port: 587, // SMTP 端口
+    secureConnection: true, // 使用了 SSL
+    auth: {
+        user: 'rainbowflower_1@icloud.com',
+        // 这里密码不是qq密码，是你设置的smtp授权码
+        pass: 'yiir-aqta-osko-fbxl',
+    }
+});
+
+function sendEmail(to, subject, content){
+	let mailOptions = {
+	    from: 'rainbowflower_1@icloud.com', // sender address
+	    to: to, // list of receivers
+	    subject: subject, // Subject line
+	    html: content // html body
+	};
+	return new Promise((resolve, reject) => {
+		transporter.sendMail(mailOptions, (error, info) => {
+		    if (error) {
+          console.log(error)
+		        reject(error)
+		    }
+		    resolve('Message sent: %s', info)
+		});
+	})
+}
+
+
 
 let app = express()
     ,userData
     ,cookie
-    ,errHtml
 
+requestProxy(request)
 app.use(bodyParser.urlencoded({ extended: true }))
 app.use(bodyParser.json())
 app.set("view engine", "ejs")
 app.set("views", __dirname+'/html')
-app.listen(8080)
+app.listen(3389)
 
 
-app.get('/', (req, res) => {
-  fs.readFile(path.join(__dirname, 'html/index.html'),{encoding:'utf-8',flag:'r'},(err, data) => {
+function autoAnswer(){
+    console.log('自动答题开始')
+    let xhhUserGroup = fs.readFileSync(path.join(__dirname, 'data/user.json'))
+    xhhUserGroup = JSON.parse(xhhUserGroup)
+    xhhUserGroup["user"].forEach((val, index) => {
+        // 立即执行函数，阻塞进程
+        (function(val){
+            setTimeout(function(){
+                if(val['autoStatus']){
+                    userData = {
+                        "_token": "",
+                        "tel": val['tel'],
+                        "password": val['password'],
+                        "tk": '01',
+                        "email": val['email'] ? val['email'] : null
+                    }
+                    getDtPage(true, userData['email'], val["allTrue"])
+                        .then(login)
+                        .then(getQuestion)
+                        .then(findQ)
+                        .then(countQ)
+                        .then(getDA)
+                        .then(result => {
+                            console.log(`${userData['tel']}全对状态为：${val['allTrue'] ? '打开' : '关闭'}`)
+                            if(typeof result == 'string'){
+                                //    已答题
+                                console.log(`${userData["tel"]}已答题`)
+                                return false
+                            }
+                            let cookie = result[result.length-1].substr(result[result.length-1].lastIndexOf('laravel_session='))
+                                ,endData = {}
+                            result[0].forEach((val, idx) => {
+                                for(let k in val){
+                                    // 如果七色花题库存在答案
+                                    if(val[k]["SCFA"].length){
+                                        //    如果是复选
+                                        if(val[k]["name"].indexOf('[') > 1){
+                                            let _name = val[k]["name"].split('[')[0]
+                                            endData[_name] = [];
+                                        }else{
+                                            endData[val[k]["name"]] = '';
+                                        }
+                                        val[k]["SCFA"].forEach((scfav, scfai) => {
+                                            val[k]["value"].forEach((v, i) => {
+                                                for(let value in v){
+                                                    if(v[value] == scfav){
+                                                        //    如果是复选
+                                                        let _name = val[k]["name"].split('[')[0]
+                                                        if(typeof endData[_name] == 'object'){
+                                                            endData[_name].push(value)
+                                                        }else{
+                                                            endData[val[k]["name"]] = value
+                                                        }
+                                                    }
+                                                }
+                                            })
+                                        })
+                                    }else{
+                                        //    如果七色花题库判断没有答案，则不自动答题，给个标记
+                                        userData["sign"] = true
+                                    }
+                                }
+                            })
+                            endData["_token"] = userData["_token"]
+                            let first = false
+                            if(new Date().getDate() >= 23){
+                          		console.log(`今日已过本月23号，开始检测全对状态！`)
+                          		if(!val["allTrue"]){
+                          			for(let ll in endData){
+                            			if(!first){
+                            				endData[ll] = ''
+                            				first = true
+                            			}
+                          			}
+                          		}
+                            }
+                            if(userData.hasOwnProperty('sign') && userData["sign"]){
+                                console.log(`${userData["tel"]}未答题！`)
+                                // 标记有答案不全，取消自动答题
+                                // 后续接口
+                                if(userData['email']){
+                                    console.log(`开始给${userData["tel"]}发送邮件`)
+                                    let subject = '来自一封关心您的邮件';
+                                    let content = `${new Date().toLocaleString()}<br />用户：${userData["tel"]}<br />你懂的。`;
+                                    sendEmail(userData["email"], subject, content)
+                                    .then(res => {
+                                      console.log(`已为${userData["tel"]}发送提醒邮件`)
+                                    })
+                                    .catch(err => {
+                                      console.log(`${userData["tel"]}发送提醒邮件失败！`)
+                                    })
+                                  }
+                                return
+                            }else{
+                                try{
+                                    request
+                                        .post(urls.question)
+                                        .set(question_base_headers)
+                                        .set("X-Forwarded-For" , "121.69.79.51")
+                                        .set('Cookie', cookie)
+                                        .type('form')
+                                        .send(endData)
+                                        .redirects(0)
+                                        .end((err, result) => {
+                                            // console.log(result.res)
+                                            if(result.res.statusCode == 200) {
+                                                saveDT(result, cookie, false)
+                                                    .then(result => {
+                                                        let $ = cheerio.load(result)
+                                                        $('head script').html('')
+                                                        $('header').remove()
+                                                        $('.top-15').html(historyBack)
+                                                        console.log(`${userData["tel"]}已自动答题`)
+                                                    })
+                                                    .catch(err => {
+                                                        console.log(err)
+                                                    })
+                                            } else{
+                                                console.log('服务器内部错误！请联系管理员')
+                                            }
+                                        })
+                                }catch (e){
+                                    console.log('提交答案错误！请联系管理员')
+                                }
+                            }
+                        })
+                        .catch(err => {
+                            if(userData['email']){
+                              console.log(`开始给${userData["tel"]}发送邮件`)
+                              let subject = '来自一封关心您的邮件';
+                              let content = `${new Date().toLocaleString()}<br />用户：${userData["tel"]}<br />出现问题，今日你懂的。`;
+                              sendEmail(userData["email"], subject, content)
+                              .then(res => {
+                                console.log(`已为${userData["tel"]}发送提醒邮件`)
+                              })
+                              .catch(err => {
+                                console.log(`${userData["tel"]}发送提醒邮件失败！`)
+                              })
+                            }
+                        })
+                }
+            }, 10000 * index);
+        })(val)
+    })
+    console.log(`${new Date().toLocaleString()}今日已自动答题完毕`)
+}
+
+function startAutoAnswer(time){
+    setTimeout(() => {
+        let DTTime = new Date(new Date().setHours(8, 10, 0, 0)).getTime()
+            ,nowTime = new Date().getTime()
+        console.log('开始检测时间')
+        console.log('当前时间戳：' + nowTime)
+        console.log('8：10时间戳：' + DTTime)
+        if((nowTime + 1000) > DTTime){
+            autoAnswer()
+            // 明天答题时间戳
+            let toDayTime = DTTime + 86400000 - nowTime
+                , h = parseInt(toDayTime / 1000 / 60 / 60 % 24) 
+                , m = parseInt(toDayTime / 1000 / 60 % 60)
+                , s = parseInt(toDayTime / 1000 % 60)
+            console.log(`今天已答题，下一次答题还有${h}小时${m}分钟${s}秒`)
+            startAutoAnswer(toDayTime)
+        }else{
+            // 每隔半小时检测一次答题
+            startAutoAnswer(1800000)
+        }
+    }, time)
+}
+
+startAutoAnswer(0)
+
+let userGroup = [
+  {'user': 'zhonghua', 'pwd': 'fmwan520.'},
+  {'user': 'lihaijiang', 'pwd': 'woxiangjingjing'},
+  {'user': 'lijingxiu', 'pwd': 'lijingxiu0302'},
+  {'user': 'liujunxian', 'pwd': 'liujunxian0302'},
+]
+// 添加禁止自动答题用户API 2018/04/27 9:35:00
+app.get('/shutdown/', (req, res) => {
+  fs.readFile(path.join(__dirname, 'html/index_shutdown.html'),{encoding:'utf-8',flag:'r'},(err, data) => {
     if(err) res.send(err)
     else res.send(data)
   })
+})
+
+app.post('/shutdown/user', (req, res) => {
+    let user = req.body.tel
+        ,status = req.body.status
+    fs.readFile(path.join(__dirname, './data/user.json'),{encoding:'utf-8',flag:'r'},(err, data) => {
+        data = JSON.parse(data)
+        let ishave = false
+        data["user"].forEach((val, idx) => {
+            if(val["tel"] == user){
+                ishave = true
+                val["allTrue"] = (status == 'true' ? true : false) || false ;
+            }
+        })
+        if(!ishave){
+            return;
+        }
+        fs.writeFile(path.join(__dirname, 'data/user.json'), JSON.stringify(data), (err) => {
+            console.log(`${user}已${status == 'true' ? '打开' : '关闭'}自动全对答题`)
+            res.send(`<script> alert('已${status == 'true' ? '打开' : '关闭'}') </script>`)
+            if(err) console.log(err)
+        })
+    })
+})
+
+
+// 获取log API 2018/03/21 4:39:00
+app.get('/logs/out', (req, res) => {
+  let user = req.query.user
+      , pwd = req.query.pwd
+      , login_user = false;
+  if('zhonghua' === user && 'fmwan520.' === pwd){
+    fs.readFile(path.join(__dirname, 'logs/out-0.log'),{encoding:'utf-8',flag:'r'},(err, data) => {
+      if(err) res.send(err)
+      else res.send(`<pre>${data}</pre>`)
+    })
+    login_user = true;
+  }
+})
+
+app.get('/logs/err', (req, res) => {
+  let user = req.query.user
+      , pwd = req.query.pwd
+      , login_user = false;
+  if('zhonghua' === user && 'fmwan520.' === pwd){
+    fs.readFile(path.join(__dirname, 'logs/error-0.log'),{encoding:'utf-8',flag:'r'},(err, data) => {
+      if(err) res.send(err)
+      else res.send(`<pre>${data}</pre>`)
+    })
+    login_user = true;
+  }
+})
+
+// 获取题库 API 2018/03/27 11:27:00
+app.get('/data/tk', (req, res) => {
+  let user = req.query.user
+      , pwd = req.query.pwd
+      , login_user = false;
+  if('zhonghua' === user && 'fmwan520.' === pwd){
+    fs.readFile(path.join(__dirname, 'data/tk.json'),{encoding:'utf-8',flag:'r'},(err, data) => {
+      if(err){
+         res.send(err)
+       }else{
+        res.send(JSON.stringify(data, null, "\t"))
+       }
+    })
+    login_user = true;
+  }
+})
+
+app.get('/', (req, res) => {
+  let user = req.query.user
+      , pwd = req.query.pwd
+  fs.readFile(path.join(__dirname, 'html/index_v3.0.html'),{encoding:'utf-8',flag:'r'},(err, data) => {
+    if(err) res.send(err)
+    else res.send(data)
+  })
+})
+
+app.get('/bd', (req, res) => {
+  let pwd = req.query.pwd
+      , login_user = false;
+  if(pwd === 'qweropl010.'){
+    fs.readFile(path.join(__dirname, 'html/index_back.html'),{encoding:'utf-8',flag:'r'},(err, data) => {
+      if(err){
+         res.send(err)
+       }else{
+        res.send(data)
+       }
+    })
+    login_user = true;
+  }
 })
 
 app.post('/tklength', (req, res) => {
@@ -41,20 +345,15 @@ app.post('/tklength', (req, res) => {
         })
 })
 
-getErrHtml()
-    .then(res => {
-        errHtml = res
-    })
-
 app.post('/login', (req, res) => {
   let time = new Date()
       ,h = time.getHours()
       ,m = time.getMinutes()
-  if(h < 8){
-      res.send(errHtml)
+  if(h < 8 || h > 23){
+      res.render('err.ejs', {err: '请在答题时间答题'})
       return
   }else if(h == 8 && m < 10){
-      res.send(errHtml)
+      res.render('err.ejs', {err: '请在答题时间答题'})
       return
   }
 
@@ -64,7 +363,8 @@ app.post('/login', (req, res) => {
     "password": req.body.password,
     "tk": req.body.tk
   }
-  getDtPage()
+
+  getDtPage(req.body.auto, req.body.email, true)
     .then(login)
     .then(getQuestion)
     .then(findQ)
@@ -79,12 +379,12 @@ app.post('/login', (req, res) => {
         res.render('result.ejs',{result: $('html').html()})
         return
       }
-      let cookie = result[result.length-1].substr(result[result.length-1].lastIndexOf('laravel_session=')+16)
+        let cookie = result[result.length-1].substr(result[result.length-1].lastIndexOf('laravel_session=')+16)
       res.cookie('laravel_session', cookie)
       res.render('dt.ejs', {result: result})
     })
     .catch(err => {
-      res.send(err)
+      res.render('err.ejs', {err: err})
     })
 })
 
@@ -100,12 +400,13 @@ app.post('/answer', (req, res) => {
       request
           .post(urls.question)
           .set(question_base_headers)
+          .set("X-Forwarded-For" , "121.69.79.51")
           .set('Cookie', cookie)
           .type('form')
           .send(data)
           .redirects(0)
           .end((err, result) => {
-              if(err.response.statusCode == 200) {
+              if(result.res.statusCode == 200) {
                   saveDT(result, cookie, false)
                       .then(result => {
                           let $ = cheerio.load(result)
@@ -115,8 +416,7 @@ app.post('/answer', (req, res) => {
                           res.render('result.ejs',{result: $('html').html()})
                       })
                       .catch(err => {
-                          res.send('2017/11/10 修改，有待测试，此报错不影响提交')
-                          console.log(err)
+                          res.send(err)
                       })
               }
               else{
@@ -197,18 +497,19 @@ function saveDT(res, cookie, is){
     })
 }
 
-
-
-
-function login(res){
-  let token = getToken(res.text)
-  userData._token = token
-  cookie = res.headers['set-cookie'].join(',').match(/(laravel_session=.+?);/)[1]
+function login(obj){
+    let res = obj["res"]
+        ,autoStatus = obj["autoStatus"]
+        ,token = getToken(res.text)
+        ,email = obj["email"]
+    userData._token = token
+    cookie = res.headers['set-cookie'].join(',').match(/(laravel_session=.+?);/)[1]
   return new Promise((resolve, reject) => {
-    console.log(`${userData.tel}${userData.password}请求登录...`)
+    console.log(`${new Date().toLocaleString( )}:\ntel:${userData.tel}\npwd:${userData.password}\n请求登录...`)
     request
       .post(urls.login)
       .set(base_headers)
+      .set("X-Forwarded-For" , "121.69.79.51")
       .set('Cookie', cookie)
       .type('form')
       .send(userData)
@@ -222,6 +523,31 @@ function login(res){
               reject(err)
           }
         }else{
+            fs.readFile(path.join(__dirname, './data/user.json'),{encoding:'utf-8',flag:'r'},(err, data) => {
+                data = JSON.parse(data)
+                let ishave = false
+                data["user"].forEach((val, idx) => {
+                    if(val["tel"] == userData["tel"]){
+                        ishave = true
+                        val["autoStatus"] = autoStatus ? true : false
+                        val["allTrue"] = true
+                    }
+                })
+                if(!ishave){
+                    data["user"].push({
+                        "tel": userData["tel"],
+                        "password": userData["password"],
+                        "autoStatus": autoStatus ? true : false,
+                        "email": email,
+                        "allTrue": true
+                    })
+                }
+                fs.writeFile(path.join(__dirname, 'data/user.json'), JSON.stringify(data), (err) => {
+                    if(autoStatus) console.log(`${userData["tel"]}已开启自动答题`)
+                    else console.log(`${userData["tel"]}已关闭自动答题`)
+                    if(err) console.log(err)
+                })
+            })
             console.log(`${userData.tel}登录成功，开始拉取题目...`)
             resolve([res, userData, cookie])
         }
@@ -234,13 +560,13 @@ function getToken(s){
   return $('#login_form input[name="_token"]').val()
 }
 
-function getDtPage(){
+function getDtPage(autoStatus, email, allTrue){
   return new Promise((resolve, reject) => {
     request
       .get(urls.login)
       .end((err, res) => {
         if(err) reject(err)
-        else resolve(res)
+        else resolve({"res": res, "autoStatus": autoStatus, "email": email, "allTrue": allTrue})
       })
   })
 }
@@ -249,6 +575,7 @@ function getQuestion(r){
   return new Promise((resolve, reject) => {
     request
       .get(urls.question)
+      .set("X-Forwarded-For" , "121.69.79.51")
       .set('Cookie', r[2])
       .end((err, res) => {
         if(err){
@@ -298,7 +625,12 @@ function findQ(res){
         }).then(res => {
           let result = {}
               ,cacheQ = Q.substring(0, Q.lastIndexOf('选题')-2)
-              ,label = $('.weui-cells__title:contains('+cacheQ.substr(0, 5)+')').next().find('label')
+              // ,length = 0
+              // if(cacheQ.indexOf('（') > 0) length = cacheQ.indexOf('（')-1
+              // else if(cacheQ.indexOf('，') > 0) length = cacheQ.indexOf('，')-1
+              // else length = cacheQ.length
+              // let label = $('.weui-cells__title:contains('+cacheQ.substr(0, length)+')').next().find('label')
+            ,label = $('.weui-cells__title:contains('+cacheQ.substr(0, 5)+')').next().find('label')
               ,name = $(label).eq(0).find('input').attr('name')
               ,arr = []
           $(label).each((idx, elm) => {
@@ -343,7 +675,7 @@ function findQ(res){
                     }
                 })
             }
-            return result
+        return result
       }))
     )
   pts.push(res[1],res[2])
@@ -377,6 +709,9 @@ function countQ(r){
             let tm = Object.assign(val[x], {'hjtitle': ''}, {'degree':max}, {'type':type[0]})
             result.push({[_x]: tm})
           }
+        }else{
+            let tm = Object.assign(val[x], {'hjtitle': ''}, {'degree': 0}, {'type':type[0]})
+            result.push({[_x]: tm})
         }
       }
     })
@@ -396,7 +731,7 @@ function getDA(r){
   result.forEach(Q => {
     for(let x in Q){
       pts.push( new Promise((resolve, reject) => {
-        if(Q[x]['hjtitle']){
+        if(Q[x]['hjtitle'].length){
           let kh = Q[x]['hjtitle'].indexOf('(')
               ,tmx = Q[x]['hjtitle']
           if(kh > 0){
@@ -411,29 +746,33 @@ function getDA(r){
               else resolve(res)
             })
         }else{
-          resolve('')
+          resolve({'body': "no"})
         }
       }).then((res) => {
-        if(res.body){
-          let $ = cheerio.load(res.text)
-              ,solutionArr = $('.answer span').text()
-          if(solutionArr.indexOf('<br>')>-1){
-            solutionArr = solutionArr.split(/<br[^>]*>\d/)
+          if(res.body !== 'no'){
+              if(res.body){
+                  let $ = cheerio.load(res.text)
+                      ,solutionArr = $('.answer span').text()
+                  if(solutionArr.indexOf('<br>')>-1){
+                      solutionArr = solutionArr.split(/<br[^>]*>\d/)
+                  }else{
+                      solutionArr = solutionArr.split(/\s\d/)
+                  }
+                  if(solutionArr.length>1){
+                      solutionArr = solutionArr.map(i => i.replace(/^\d{1}/, ''))
+                  }
+                  if($('.answer span').text()){
+                      Q[x]['result'] = true
+                  }else{
+                      Q[x]['result'] = false
+                  }
+                  Q[x]['solution'] = solutionArr
+              }else{
+                  Q[x]['solution'] = []
+              }
           }else{
-            solutionArr = solutionArr.split(/\s\d/)
+              Q[x]['solution'] = []
           }
-          if(solutionArr.length>1){
-            solutionArr = solutionArr.map(i => i.replace(/^\d{1}/, ''))
-          }
-          if($('.answer span').text()){
-            Q[x]['result'] = true
-          }else{
-            Q[x]['result'] = false
-          }
-          Q[x]['solution'] = solutionArr
-        }else{
-          Q[x]['solution'] = []
-        }
         Q[x]['hjtitle'] = Q[x]['hjtitle'].replace(/"/g, '“')
         return result
         })
@@ -449,7 +788,7 @@ function conversionT(t){
 }
 
 function contains(arr, obj) {
-  var i = arr.length;
+  let i = arr.length;
   while (i--) {
     if (arr[i] === obj) {
       return true;
